@@ -148,7 +148,8 @@ function App() {
   }, [whiteNoiseVolume]);
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center space-y-8 p-4">
+    <>
+    <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
 
       <audio
         id="atcPlayer"
@@ -157,7 +158,7 @@ function App() {
         className="hidden"
         crossOrigin="anonymous"
       >
-        <source src="http://localhost:3000/stream" type="audio/mpeg" />
+        <source src="http://localhost:3001/stream" type="audio/mpeg" />
         Your browser does not support the audio element.
       </audio>
 
@@ -183,6 +184,7 @@ function App() {
       </div>
 
     </div>
+    </>
   );
 }
 
