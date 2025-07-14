@@ -6,4 +6,4 @@ PORT=3001 npm start &
 
 # Start the React dev server
 cd /app/client
-PORT=3000 npm start
+PORT=3000 PUBLIC_URL=/flightnoise npm start
