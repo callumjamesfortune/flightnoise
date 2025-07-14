@@ -9,6 +9,6 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
+document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#030712');
 
 
