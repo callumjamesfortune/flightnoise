@@ -123,7 +123,6 @@ function App() {
           artist: 'FlightNoise',
           album: 'Air Traffic Audio',
           artwork: [
-            { src: '/flightnoise/logo512.png', sizes: '512x512', type: 'image/png' },
             { src: '/flightnoise/logo192.png', sizes: '192x192', type: 'image/png' },
           ],
         });
