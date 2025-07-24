@@ -10,7 +10,7 @@ RUN cd /app/server && npm install
 
 # Copy client files and install dependencies
 COPY client /app/client
-RUN cd /app/client && npm install
+RUN cd /app/client && npm install && npm run build
 
 # Copy start script
 COPY start.sh /app/start.sh
