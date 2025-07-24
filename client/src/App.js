@@ -107,7 +107,7 @@ function App() {
 
       let scale = 1 + rms * 5;
       circle.style.transform = `scale(${scale.toFixed(3)})`;
-      backingCircle.style.transform = `scale(${(scale**2.5).toFixed(3)})`;
+      backingCircle.style.transform = `scale(${(scale ** 2.5).toFixed(3)})`;
     };
 
     const onPlay = () => {
@@ -116,7 +116,30 @@ function App() {
       } else if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume();
       }
+    
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new window.MediaMetadata({
+          title: 'Live ATC Stream',
+          artist: 'FlightNoise',
+          album: 'Air Traffic Audio',
+          artwork: [
+            { src: '/flightnoise/logo512.png', sizes: '512x512', type: 'image/png' },
+            { src: '/flightnoise/logo192.png', sizes: '192x192', type: 'image/png' },
+          ],
+        });
+    
+        navigator.mediaSession.setActionHandler('play', () => {
+          audioRef.current.play();
+          setIsPlaying(true);
+        });
+    
+        navigator.mediaSession.setActionHandler('pause', () => {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        });
+      }
     };
+    
 
     const onPause = () => {
       if (animationIdRef.current) {
@@ -149,43 +172,43 @@ function App() {
 
   return (
     <>
-    <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
 
-      <audio
-        id="atcPlayer"
-        ref={audioRef}
-        preload="none"
-        className="hidden"
-        crossOrigin="anonymous"
-      >
-        <source src={`${window.location.hostname === 'localhost' 
-  ? 'http://localhost:7633' 
-  : `http://${window.location.hostname}`}/flightnoise/api/stream`} type="audio/mpeg" />
-        Your browser does not support the audio element.
-      </audio>
-
-      <div className='relative w-24 h-24'>
-
-        <div
-          id="circle"
-          ref={circleRef}
-          className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title="Click to play/pause"
+        <audio
+          id="atcPlayer"
+          ref={audioRef}
+          preload="none"
+          className="hidden"
+          crossOrigin="anonymous"
         >
-          <IoMdAirplane className='text-gray-100 text-[2.8em]' />
-        </div>
+          <source src={`${window.location.hostname === 'localhost'
+            ? 'http://localhost:7633'
+            : `http://${window.location.hostname}`}/flightnoise/api/stream`} type="audio/mpeg" />
+          Your browser does not support the audio element.
+        </audio>
 
-        <div
-          id="backing-circle"
-          ref={backingCircleRef}
-          className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title="Click to play/pause"
-        >
+        <div className='relative w-24 h-24'>
+
+          <div
+            id="circle"
+            ref={circleRef}
+            className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
+            title="Click to play/pause"
+          >
+            <IoMdAirplane className='text-gray-100 text-[2.8em]' />
+          </div>
+
+          <div
+            id="backing-circle"
+            ref={backingCircleRef}
+            className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
+            title="Click to play/pause"
+          >
+          </div>
+
         </div>
 
       </div>
-
-    </div>
     </>
   );
 }
