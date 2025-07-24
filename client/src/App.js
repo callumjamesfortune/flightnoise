@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FaPaperPlane } from "react-icons/fa";
+import { IoMdAirplane } from "react-icons/io";
 import './App.css';
 
 function App() {
@@ -172,7 +172,7 @@ function App() {
           className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
           title="Click to play/pause"
         >
-          <FaPaperPlane className='text-gray-100 text-[1.5em]' />
+          <IoMdAirplane className='text-gray-100 text-[2.8em]' />
         </div>
 
         <div
