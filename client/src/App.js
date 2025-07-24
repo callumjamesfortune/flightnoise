@@ -158,7 +158,9 @@ function App() {
         className="hidden"
         crossOrigin="anonymous"
       >
-        <source src="http://localhost:7633/stream" type="audio/mpeg" />
+        <source src={`${window.location.hostname === 'localhost' 
+  ? 'http://localhost:7633' 
+  : `http://${window.location.hostname}:7633`}/stream`} type="audio/mpeg" />
         Your browser does not support the audio element.
       </audio>
 
