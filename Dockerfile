@@ -1,24 +1,24 @@
 # Use Node base image
 FROM node:18-alpine
 
-# Create working directories
+# Set working directory
 WORKDIR /app
 
-# Copy server files and install dependencies
+# ---- SERVER ----
 COPY server /app/server
 RUN cd /app/server && npm install
 
-# Copy client files and install dependencies
+# ---- CLIENT ----
 COPY client /app/client
 RUN cd /app/client && npm install && npm run build
 
-# Copy start script
+# Copy client build to a shared volume folder (bind-mounted by the host)
+RUN mkdir -p /static && cp -r /app/client/build/* /static/
+
+# Start server
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Expose both ports
-EXPOSE 7632
-EXPOSE 7633
+EXPOSE 7633  # Server only
 
-# Run both servers
 CMD ["/app/start.sh"]
