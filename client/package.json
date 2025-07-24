@@ -1,6 +1,7 @@
 {
   "name": "flightnoise",
   "version": "0.1.0",
+  "homepage": "/flightnoise",
   "private": true,
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
