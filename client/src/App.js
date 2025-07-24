@@ -160,7 +160,7 @@ function App() {
       >
         <source src={`${window.location.hostname === 'localhost' 
   ? 'http://localhost:7633' 
-  : `http://${window.location.hostname}`}/api/stream`} type="audio/mpeg" />
+  : `http://${window.location.hostname}`}/flightnoise/api/stream`} type="audio/mpeg" />
         Your browser does not support the audio element.
       </audio>
 
