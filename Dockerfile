@@ -17,8 +17,8 @@ COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Expose both ports
-EXPOSE 3000
-EXPOSE 3001
+EXPOSE 7632
+EXPOSE 7633
 
 # Run both servers
 CMD ["/app/start.sh"]
