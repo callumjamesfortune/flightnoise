@@ -8,12 +8,15 @@ function App() {
   const circleRef = useRef(null);
   const backingCircleRef = useRef(null);
 
+  // Persistent references
   const audioContextRef = useRef(null);
+  const sourceRef = useRef(null);
+  const masterGainRef = useRef(null);
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
-  const sourceRef = useRef(null);
-  const atcGainRef = useRef(null);
   const animationIdRef = useRef(null);
+  const elevatorSourceRef = useRef(null);
+  const elevatorGainRef = useRef(null);
 
   const [isMuted, setIsMuted] = useState(false);
 
@@ -23,35 +26,29 @@ function App() {
     const backingCircle = backingCircleRef.current;
     if (!audio || !circle || !backingCircle) return;
 
-    const handleClick = () => {
-      if (!atcGainRef.current) return;
-      const newMuted = !isMuted;
-      setIsMuted(newMuted);
-      atcGainRef.current.gain.value = newMuted ? 0 : 1;
-    };
+    // Setup audio nodes after AudioContext is created
+    const setupAudioNodes = (audioContext) => {
+      // Create master gain
+      const masterGain = audioContext.createGain();
+      masterGain.gain.value = isMuted ? 0 : 1;
+      masterGainRef.current = masterGain;
 
-    circle.addEventListener('click', handleClick);
+      // Create MediaElementSource ONCE
+      if (!sourceRef.current) {
+        sourceRef.current = audioContext.createMediaElementSource(audio);
+        sourceRef.current.connect(masterGain);
+      }
 
-    const setupAudioContext = () => {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContext();
-      audioContextRef.current = audioContext;
+      // Setup analyser
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
 
-      // Create ATC stream source
-      sourceRef.current = audioContext.createMediaElementSource(audio);
+      masterGain.connect(analyser);
+      analyser.connect(audioContext.destination);
 
-      analyserRef.current = audioContext.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
-
-      atcGainRef.current = audioContext.createGain();
-      atcGainRef.current.gain.value = 1; // Initially unmuted
-
-      sourceRef.current.connect(atcGainRef.current);
-      atcGainRef.current.connect(analyserRef.current);
-      analyserRef.current.connect(audioContext.destination);
-
-      // Elevator music (looping)
+      // Load elevator music buffer
       fetch('/flightnoise/elevator.mp3')
         .then(res => res.arrayBuffer())
         .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
@@ -64,91 +61,118 @@ function App() {
           elevatorGain.gain.value = 0.08;
 
           elevatorSource.connect(elevatorGain);
-          elevatorGain.connect(audioContext.destination);
-          elevatorSource.start();
-        })
-        .catch(err => {
-          console.error('Failed to load elevator music:', err);
-        });
+          elevatorGain.connect(masterGain);
 
+          elevatorSource.start();
+
+          elevatorSourceRef.current = elevatorSource;
+          elevatorGainRef.current = elevatorGain;
+        })
+        .catch(console.error);
+
+      // Animation for visualizer
+      const animate = () => {
+        animationIdRef.current = requestAnimationFrame(animate);
+        analyser.getByteTimeDomainData(dataArrayRef.current);
+
+        let sum = 0;
+        for (let i = 0; i < dataArrayRef.current.length; i++) {
+          let val = (dataArrayRef.current[i] - 128) / 128;
+          sum += val * val;
+        }
+        const rms = Math.sqrt(sum / dataArrayRef.current.length);
+
+        const scale = 1 + rms * 5;
+        circle.style.transform = `scale(${scale.toFixed(3)})`;
+        backingCircle.style.transform = `scale(${(scale ** 2.5).toFixed(3)})`;
+      };
       animate();
     };
 
-    const animate = () => {
-      animationIdRef.current = requestAnimationFrame(animate);
-
-      analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
-
-      let sum = 0;
-      for (let i = 0; i < dataArrayRef.current.length; i++) {
-        let val = (dataArrayRef.current[i] - 128) / 128;
-        sum += val * val;
-      }
-      let rms = Math.sqrt(sum / dataArrayRef.current.length);
-
-      let scale = 1 + rms * 5;
-      circle.style.transform = `scale(${scale.toFixed(3)})`;
-      backingCircle.style.transform = `scale(${(scale ** 2.5).toFixed(3)})`;
-    };
-
+    // Handler for first user interaction
     const handleFirstInteraction = async () => {
       if (!audioContextRef.current) {
-        setupAudioContext();
-        await audioRef.current.play();
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContextRef.current = new AudioContext();
+        setupAudioNodes(audioContextRef.current);
+      }
+      const audioContext = audioContextRef.current;
+
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      try {
+        await audio.play();
+      } catch (e) {
+        console.warn('Failed to play audio:', e);
+      }
+      window.removeEventListener('click', handleFirstInteraction);
+    };
+    window.addEventListener('click', handleFirstInteraction, { once: true });
+
+    // Mute toggle handler
+    const handleClick = () => {
+      const newMuted = !isMuted;
+      setIsMuted(newMuted);
+      if (masterGainRef.current) {
+        masterGainRef.current.gain.value = newMuted ? 0 : 1;
       }
     };
-
-    // Start audio context on first user interaction
-    window.addEventListener('click', handleFirstInteraction, { once: true });
+    circle.addEventListener('click', handleClick);
 
     return () => {
       circle.removeEventListener('click', handleClick);
       window.removeEventListener('click', handleFirstInteraction);
       if (animationIdRef.current) cancelAnimationFrame(animationIdRef.current);
-      if (audioContextRef.current) audioContextRef.current.close();
+      // DO NOT close audioContext here to avoid recreation issues in StrictMode
     };
   }, [isMuted]);
 
+  // Sync gain when isMuted changes (in case changed outside of click handler)
+  useEffect(() => {
+    if (masterGainRef.current) {
+      masterGainRef.current.gain.value = isMuted ? 0 : 1;
+    }
+  }, [isMuted]);
+
   return (
-    <>
-      <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
 
-        <audio
-          id="atcPlayer"
-          ref={audioRef}
-          preload="auto"
-          className="hidden"
-          crossOrigin="anonymous"
-          src="http://ubuntu.seefortune.co.uk/flightnoise/api/stream"
+      <audio
+        id="atcPlayer"
+        ref={audioRef}
+        preload="auto"
+        className="hidden"
+        crossOrigin="anonymous"
+        src="https://ubuntu.seefortune.co.uk/flightnoise/api/stream"
+      >
+        Your browser does not support the audio element.
+      </audio>
+
+      <div className='relative w-24 h-24'>
+
+        <div
+          id="circle"
+          ref={circleRef}
+          className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
+          title="Click to mute/unmute ATC"
         >
-          Your browser does not support the audio element.
-        </audio>
-
-        <div className='relative w-24 h-24'>
-
-          <div
-            id="circle"
-            ref={circleRef}
-            className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-            title="Click to mute/unmute ATC"
-          >
-            <IoMdAirplane className='text-gray-100 text-[2.8em]' />
-          </div>
-
-          <div
-            id="backing-circle"
-            ref={backingCircleRef}
-            className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-            title="Click to mute/unmute ATC"
-          >
-          </div>
-
+          <IoMdAirplane className='text-gray-100 text-[2.8em]' />
         </div>
 
-        <ClosestPlanes />
+        <div
+          id="backing-circle"
+          ref={backingCircleRef}
+          className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
+          title="Click to mute/unmute ATC"
+        >
+        </div>
 
       </div>
-    </>
+
+      <ClosestPlanes />
+
+    </div>
   );
 }
 
