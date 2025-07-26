@@ -8,15 +8,15 @@ function App() {
   const circleRef = useRef(null);
   const backingCircleRef = useRef(null);
 
-  // Persistent references
   const audioContextRef = useRef(null);
   const sourceRef = useRef(null);
   const masterGainRef = useRef(null);
-  const analyserRef = useRef(null);
-  const dataArrayRef = useRef(null);
   const animationIdRef = useRef(null);
   const elevatorSourceRef = useRef(null);
   const elevatorGainRef = useRef(null);
+  const atcAnalyserRef = useRef(null);
+  const atcDataArrayRef = useRef(null);
+  const hasInitializedRef = useRef(false); // ✅ NEW: track first interaction
 
   const [isMuted, setIsMuted] = useState(false);
 
@@ -26,29 +26,26 @@ function App() {
     const backingCircle = backingCircleRef.current;
     if (!audio || !circle || !backingCircle) return;
 
-    // Setup audio nodes after AudioContext is created
     const setupAudioNodes = (audioContext) => {
-      // Create master gain
       const masterGain = audioContext.createGain();
       masterGain.gain.value = isMuted ? 0 : 1;
       masterGainRef.current = masterGain;
 
-      // Create MediaElementSource ONCE
-      if (!sourceRef.current) {
-        sourceRef.current = audioContext.createMediaElementSource(audio);
-        sourceRef.current.connect(masterGain);
-      }
+      // Always create and connect source + ATC analyser
+      const source = audioContext.createMediaElementSource(audio);
+      sourceRef.current = source;
 
-      // Setup analyser
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyserRef.current = analyser;
-      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+      const atcAnalyser = audioContext.createAnalyser();
+      atcAnalyser.fftSize = 256;
+      atcAnalyserRef.current = atcAnalyser;
+      atcDataArrayRef.current = new Uint8Array(atcAnalyser.frequencyBinCount);
 
-      masterGain.connect(analyser);
-      analyser.connect(audioContext.destination);
+      source.connect(atcAnalyser);
+      atcAnalyser.connect(masterGain);
 
-      // Load elevator music buffer
+      masterGain.connect(audioContext.destination);
+
+      // Elevator music
       fetch('/flightnoise/elevator.mp3')
         .then(res => res.arrayBuffer())
         .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
@@ -70,65 +67,65 @@ function App() {
         })
         .catch(console.error);
 
-      // Animation for visualizer
       const animate = () => {
+        if (!atcAnalyserRef.current || !atcDataArrayRef.current) return;
         animationIdRef.current = requestAnimationFrame(animate);
-        analyser.getByteTimeDomainData(dataArrayRef.current);
+
+        atcAnalyserRef.current.getByteTimeDomainData(atcDataArrayRef.current);
 
         let sum = 0;
-        for (let i = 0; i < dataArrayRef.current.length; i++) {
-          let val = (dataArrayRef.current[i] - 128) / 128;
+        for (let i = 0; i < atcDataArrayRef.current.length; i++) {
+          const val = (atcDataArrayRef.current[i] - 128) / 128;
           sum += val * val;
         }
-        const rms = Math.sqrt(sum / dataArrayRef.current.length);
 
+        const rms = Math.sqrt(sum / atcDataArrayRef.current.length);
         const scale = 1 + rms * 5;
-        circle.style.transform = `scale(${scale.toFixed(3)})`;
-        backingCircle.style.transform = `scale(${(scale ** 2.5).toFixed(3)})`;
+        backingCircle.style.transform = `scale(${(scale ** 1.2).toFixed(3)})`;
       };
       animate();
     };
 
-    // Handler for first user interaction
     const handleFirstInteraction = async () => {
       if (!audioContextRef.current) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioContextRef.current = new AudioContext();
-        setupAudioNodes(audioContextRef.current);
+        const context = new AudioContext();
+        audioContextRef.current = context;
+        setupAudioNodes(context);
       }
-      const audioContext = audioContextRef.current;
 
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
+      const audioContext = audioContextRef.current;
+      if (audioContext.state === 'suspended') await audioContext.resume();
       try {
         await audio.play();
       } catch (e) {
         console.warn('Failed to play audio:', e);
       }
+
+      hasInitializedRef.current = true; // ✅ Mark initialization done
       window.removeEventListener('click', handleFirstInteraction);
     };
+
     window.addEventListener('click', handleFirstInteraction, { once: true });
 
-    // Mute toggle handler
     const handleClick = () => {
+      if (!hasInitializedRef.current) return; // ✅ Prevent toggle on first setup click
       const newMuted = !isMuted;
       setIsMuted(newMuted);
       if (masterGainRef.current) {
         masterGainRef.current.gain.value = newMuted ? 0 : 1;
       }
     };
+
     circle.addEventListener('click', handleClick);
 
     return () => {
       circle.removeEventListener('click', handleClick);
       window.removeEventListener('click', handleFirstInteraction);
       if (animationIdRef.current) cancelAnimationFrame(animationIdRef.current);
-      // DO NOT close audioContext here to avoid recreation issues in StrictMode
     };
   }, [isMuted]);
 
-  // Sync gain when isMuted changes (in case changed outside of click handler)
   useEffect(() => {
     if (masterGainRef.current) {
       masterGainRef.current.gain.value = isMuted ? 0 : 1;
@@ -137,7 +134,6 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
-
       <audio
         id="atcPlayer"
         ref={audioRef}
@@ -150,7 +146,6 @@ function App() {
       </audio>
 
       <div className='relative w-24 h-24'>
-
         <div
           id="circle"
           ref={circleRef}
@@ -167,11 +162,9 @@ function App() {
           title="Click to mute/unmute ATC"
         >
         </div>
-
       </div>
 
       <ClosestPlanes />
-
     </div>
   );
 }
