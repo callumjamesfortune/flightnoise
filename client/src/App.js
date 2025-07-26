@@ -11,14 +11,10 @@ function App() {
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
   const sourceRef = useRef(null);
-  const filterNodeRef = useRef(null);
-  const gainNodeRef = useRef(null);
-  const whiteNoiseGainRef = useRef(null);
+  const atcGainRef = useRef(null);
   const animationIdRef = useRef(null);
-  const whiteNoiseSourceRef = useRef(null);
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [whiteNoiseVolume, setWhiteNoiseVolume] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -26,67 +22,53 @@ function App() {
     const backingCircle = backingCircleRef.current;
     if (!audio || !circle || !backingCircle) return;
 
-    const handleClick = async () => {
-      if (audio.paused) {
-        if (audioContextRef.current?.state === 'suspended') {
-          await audioContextRef.current.resume();
-        }
-        audio.play();
-        setIsPlaying(true);
-        setWhiteNoiseVolume(0.02);
-      } else {
-        audio.pause();
-        setIsPlaying(false);
-        setWhiteNoiseVolume(0);
-      }
+    const handleClick = () => {
+      if (!atcGainRef.current) return;
+      const newMuted = !isMuted;
+      setIsMuted(newMuted);
+      atcGainRef.current.gain.value = newMuted ? 0 : 1;
     };
 
     circle.addEventListener('click', handleClick);
 
     const setupAudioContext = () => {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      audioContextRef.current = new AudioContext();
-      const audioContext = audioContextRef.current;
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
 
+      // Create ATC stream source
       sourceRef.current = audioContext.createMediaElementSource(audio);
 
       analyserRef.current = audioContext.createAnalyser();
       analyserRef.current.fftSize = 256;
       dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
 
-      filterNodeRef.current = audioContext.createBiquadFilter();
-      filterNodeRef.current.type = 'lowpass';
+      atcGainRef.current = audioContext.createGain();
+      atcGainRef.current.gain.value = 1; // Initially unmuted
 
-      gainNodeRef.current = audioContext.createGain();
-
-      const bufferSize = 2 * audioContext.sampleRate;
-      const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-      const output = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = Math.random() * 2 - 1;
-      }
-
-      whiteNoiseSourceRef.current = audioContext.createBufferSource();
-      whiteNoiseSourceRef.current.buffer = noiseBuffer;
-      whiteNoiseSourceRef.current.loop = true;
-
-      whiteNoiseGainRef.current = audioContext.createGain();
-      whiteNoiseGainRef.current.gain.value = whiteNoiseVolume;
-
-      // Connect audio stream nodes: source -> filter -> gain -> analyser
-      sourceRef.current.connect(filterNodeRef.current);
-      filterNodeRef.current.connect(gainNodeRef.current);
-      gainNodeRef.current.connect(analyserRef.current);
-
-      // Connect white noise source -> gain -> analyser
-      whiteNoiseSourceRef.current.connect(whiteNoiseGainRef.current);
-      whiteNoiseGainRef.current.connect(analyserRef.current);
-
-      // Connect analyser to destination
+      sourceRef.current.connect(atcGainRef.current);
+      atcGainRef.current.connect(analyserRef.current);
       analyserRef.current.connect(audioContext.destination);
 
-      // Start white noise playback
-      whiteNoiseSourceRef.current.start();
+      // Elevator music (looping)
+      fetch('/flightnoise/elevator.mp3')
+        .then(res => res.arrayBuffer())
+        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+        .then(buffer => {
+          const elevatorSource = audioContext.createBufferSource();
+          elevatorSource.buffer = buffer;
+          elevatorSource.loop = true;
+
+          const elevatorGain = audioContext.createGain();
+          elevatorGain.gain.value = 0.08;
+
+          elevatorSource.connect(elevatorGain);
+          elevatorGain.connect(audioContext.destination);
+          elevatorSource.start();
+        })
+        .catch(err => {
+          console.error('Failed to load elevator music:', err);
+        });
 
       animate();
     };
@@ -108,63 +90,23 @@ function App() {
       backingCircle.style.transform = `scale(${(scale ** 2.5).toFixed(3)})`;
     };
 
-    const onPlay = () => {
+    const handleFirstInteraction = async () => {
       if (!audioContextRef.current) {
         setupAudioContext();
-      } else if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
-      }
-    
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new window.MediaMetadata({
-          title: 'Live ATC Stream',
-          artist: 'FlightNoise',
-          album: 'Air Traffic Audio',
-          artwork: [
-            { src: '/flightnoise/icon.png', sizes: '192x192', type: 'image/png' },
-          ],
-        });
-    
-        navigator.mediaSession.setActionHandler('play', () => {
-          audioRef.current.play();
-          setIsPlaying(true);
-        });
-    
-        navigator.mediaSession.setActionHandler('pause', () => {
-          audioRef.current.pause();
-          setIsPlaying(false);
-        });
+        await audioRef.current.play();
       }
     };
-    
 
-    const onPause = () => {
-      if (animationIdRef.current) {
-        cancelAnimationFrame(animationIdRef.current);
-        animationIdRef.current = null;
-      }
-      circle.style.transform = 'scale(1)';
-      backingCircle.style.transform = 'scale(1)';
-    };
-
-    audio.addEventListener('play', onPlay);
-    audio.addEventListener('pause', onPause);
+    // Start audio context on first user interaction
+    window.addEventListener('click', handleFirstInteraction, { once: true });
 
     return () => {
       circle.removeEventListener('click', handleClick);
-      audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('pause', onPause);
+      window.removeEventListener('click', handleFirstInteraction);
       if (animationIdRef.current) cancelAnimationFrame(animationIdRef.current);
-      if (whiteNoiseSourceRef.current) whiteNoiseSourceRef.current.stop();
       if (audioContextRef.current) audioContextRef.current.close();
     };
-  }, []);
-
-  useEffect(() => {
-    if (whiteNoiseGainRef.current) {
-      whiteNoiseGainRef.current.gain.value = whiteNoiseVolume;
-    }
-  }, [whiteNoiseVolume]);
+  }, [isMuted]);
 
   return (
     <>
@@ -173,13 +115,11 @@ function App() {
         <audio
           id="atcPlayer"
           ref={audioRef}
-          preload="none"
+          preload="auto"
           className="hidden"
           crossOrigin="anonymous"
+          src="http://ubuntu.seefortune.co.uk/flightnoise/api/stream"
         >
-          <source src={`${window.location.hostname === 'localhost'
-            ? 'http://localhost:7633'
-            : `http://${window.location.hostname}`}/flightnoise/api/stream`} type="audio/mpeg" />
           Your browser does not support the audio element.
         </audio>
 
@@ -189,7 +129,7 @@ function App() {
             id="circle"
             ref={circleRef}
             className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-            title="Click to play/pause"
+            title="Click to mute/unmute ATC"
           >
             <IoMdAirplane className='text-gray-100 text-[2.8em]' />
           </div>
@@ -198,11 +138,15 @@ function App() {
             id="backing-circle"
             ref={backingCircleRef}
             className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-            title="Click to play/pause"
+            title="Click to mute/unmute ATC"
           >
           </div>
 
         </div>
+
+        <p className="text-sm text-gray-600">
+          {isMuted ? 'ATC Muted' : 'ATC Playing'}
+        </p>
 
       </div>
     </>
