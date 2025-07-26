@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { IoMdAirplane } from "react-icons/io";
+import ClosestPlanes from './components/closest-planes';
 import './App.css';
 
 function App() {
@@ -144,9 +145,7 @@ function App() {
 
         </div>
 
-        <p className="text-sm text-gray-600">
-          {isMuted ? 'ATC Muted' : 'ATC Playing'}
-        </p>
+        <ClosestPlanes />
 
       </div>
     </>
