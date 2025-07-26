@@ -81,7 +81,7 @@ function App() {
 
         const rms = Math.sqrt(sum / atcDataArrayRef.current.length);
         const scale = 1 + rms * 5;
-        backingCircle.style.transform = `scale(${(scale ** 1.2).toFixed(3)})`;
+        backingCircle.style.transform = `scale(${(scale ** 1.25).toFixed(3)})`;
       };
       animate();
     };
