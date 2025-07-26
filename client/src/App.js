@@ -48,7 +48,6 @@ function App() {
       audioContextRef.current = new AudioContext();
       const audioContext = audioContextRef.current;
 
-      // Your stream source
       sourceRef.current = audioContext.createMediaElementSource(audio);
 
       analyserRef.current = audioContext.createAnalyser();
@@ -60,7 +59,6 @@ function App() {
 
       gainNodeRef.current = audioContext.createGain();
 
-      // Create white noise buffer
       const bufferSize = 2 * audioContext.sampleRate;
       const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
       const output = noiseBuffer.getChannelData(0);
@@ -123,7 +121,7 @@ function App() {
           artist: 'FlightNoise',
           album: 'Air Traffic Audio',
           artwork: [
-            { src: '/flightnoise/logo192.png', sizes: '192x192', type: 'image/png' },
+            { src: '/flightnoise/icon.png', sizes: '192x192', type: 'image/png' },
           ],
         });
     
@@ -162,7 +160,6 @@ function App() {
     };
   }, []);
 
-  // Live updates for white noise volume
   useEffect(() => {
     if (whiteNoiseGainRef.current) {
       whiteNoiseGainRef.current.gain.value = whiteNoiseVolume;
