@@ -13,8 +13,9 @@ app.get('/stream', (req, res) => {
   res.setHeader('Content-Type', 'audio/mpeg');
 
   const ffmpegArgs = [
+    '-user_agent', 'Mozilla/5.0',   // <-- Add this line to spoof user agent
     '-i', LIVEATC_STREAM,
-    '-stream_loop', '-1',            // ⬅️ loop only the elevator music
+    '-stream_loop', '-1',            // loop elevator music
     '-i', ELEVATOR_MUSIC_PATH,
     '-filter_complex',
     '[0:a]volume=1[a0];[1:a]volume=0.08[a1];[a0][a1]amix=inputs=2:duration=longest[aout]',
@@ -23,15 +24,13 @@ app.get('/stream', (req, res) => {
     '-ac', '2',
     '-ar', '44100',
     '-b:a', '192k',
-    'pipe:1'                         // Output to stdout
+    'pipe:1'                         // output to stdout
   ];
 
   const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
-  // Pipe output to the response
   ffmpeg.stdout.pipe(res);
 
-  // Log errors
   ffmpeg.stderr.on('data', (data) => {
     console.error('FFmpeg stderr:', data.toString());
   });
@@ -46,7 +45,6 @@ app.get('/stream', (req, res) => {
     res.end();
   });
 
-  // Stop FFmpeg when client disconnects
   req.on('close', () => {
     ffmpeg.kill('SIGINT');
   });
