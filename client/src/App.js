@@ -24,58 +24,74 @@ function App() {
     const backingCircle = backingCircleRef.current;
     if (!audio || !circle || !backingCircle) return;
 
-    const setupAudioNodes = (audioContext) => {
-      const masterGain = audioContext.createGain();
+    if (!audioContextRef.current) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const context = new AudioContext();
+      audioContextRef.current = context;
+
+      const masterGain = context.createGain();
       masterGain.gain.value = isMuted ? 0 : 1;
       masterGainRef.current = masterGain;
 
-      const source = audioContext.createMediaElementSource(audio);
+      const source = context.createMediaElementSource(audio);
       sourceRef.current = source;
 
-      const analyser = audioContext.createAnalyser();
+      const analyser = context.createAnalyser();
       analyser.fftSize = 256;
       analyserRef.current = analyser;
       dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
 
       source.connect(analyser);
       analyser.connect(masterGain);
-      masterGain.connect(audioContext.destination);
+      masterGain.connect(context.destination);
+    }
 
-      const animate = () => {
-        if (!analyserRef.current || !dataArrayRef.current) return;
-        animationIdRef.current = requestAnimationFrame(animate);
+    const animate = () => {
+      if (!analyserRef.current || !dataArrayRef.current) return;
 
-        analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
+      animationIdRef.current = requestAnimationFrame(animate);
 
-        let sum = 0;
-        for (let i = 0; i < dataArrayRef.current.length; i++) {
-          const val = (dataArrayRef.current[i] - 128) / 128;
-          sum += val * val;
-        }
+      analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
 
-        const rms = Math.sqrt(sum / dataArrayRef.current.length);
-        const scale = 1 + rms * 5;
-        backingCircle.style.transform = `scale(${(scale ** 1.25).toFixed(3)})`;
-      };
-      animate();
-    };
-
-    const handleFirstInteraction = async () => {
-      if (!audioContextRef.current) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const context = new AudioContext();
-        audioContextRef.current = context;
-        setupAudioNodes(context);
+      let sum = 0;
+      for (let i = 0; i < dataArrayRef.current.length; i++) {
+        const val = (dataArrayRef.current[i] - 128) / 128;
+        sum += val * val;
       }
 
-      const audioContext = audioContextRef.current;
-      if (audioContext.state === 'suspended') await audioContext.resume();
+      const rms = Math.sqrt(sum / dataArrayRef.current.length);
+      const scale = 1 + rms * 5;
+      backingCircle.style.transform = `scale(${(scale ** 1.25).toFixed(3)})`;
+    };
+
+    const handlePlay = () => {
+      if (!animationIdRef.current) animate();
+    };
+
+    const handlePause = () => {
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
+      backingCircle.style.transform = 'scale(1)'; // reset circle scale on pause
+    };
+
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+
+    if (!audio.paused) {
+      animate();
+    }
+
+    const handleFirstInteraction = async () => {
+      if (!audioContextRef.current) return;
+      const context = audioContextRef.current;
+      if (context.state === 'suspended') await context.resume();
       try {
         await audio.play();
       } catch (e) {
         console.warn('Failed to play audio:', e);
       }
-
       hasInitializedRef.current = true;
       window.removeEventListener('click', handleFirstInteraction);
     };
@@ -94,9 +110,14 @@ function App() {
     circle.addEventListener('click', handleClick);
 
     return () => {
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
       circle.removeEventListener('click', handleClick);
       window.removeEventListener('click', handleFirstInteraction);
-      if (animationIdRef.current) cancelAnimationFrame(animationIdRef.current);
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
     };
   }, [isMuted]);
 
