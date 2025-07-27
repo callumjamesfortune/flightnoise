@@ -6,9 +6,11 @@ import './App.css';
 function App() {
   const audioRef = useRef(null);
   const circleRef = useRef(null);
+  const backgroundCircleRef = useRef(null);
 
   const audioContextRef = useRef(null);
   const sourceRef = useRef(null);
+  const analyserRef = useRef(null);
   const masterGainRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,7 +33,12 @@ function App() {
       const source = context.createMediaElementSource(audio);
       sourceRef.current = source;
 
-      source.connect(masterGain);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+
+      source.connect(analyser);
+      analyser.connect(masterGain);
       masterGain.connect(context.destination);
     }
 
@@ -51,9 +58,9 @@ function App() {
   useEffect(() => {
     const audio = audioRef.current;
     const circle = circleRef.current;
-    if (!audio || !circle) return;
+    const bgCircle = backgroundCircleRef.current;
+    if (!audio || !circle || !bgCircle) return;
 
-    // Media Session API setup
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new window.MediaMetadata({
         title: 'FlightNoise',
@@ -70,6 +77,24 @@ function App() {
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+
+    const animate = () => {
+      const analyser = analyserRef.current;
+      const bg = backgroundCircleRef.current;
+
+      if (analyser && bg) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        const volume = data.reduce((a, b) => a + b, 0) / data.length;
+
+        const scale = 1 + (volume / 255); // adjust sensitivity here
+        bg.style.transform = `scale(${scale.toFixed(2)})`;
+      }
+
+      requestAnimationFrame(animate);
+    };
+
+    animate();
 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
@@ -96,6 +121,10 @@ function App() {
       </audio>
 
       <div className='relative w-24 h-24'>
+        <div
+          ref={backgroundCircleRef}
+          className="absolute w-24 h-24 bg-purple-500 opacity-50 rounded-full z-0 transition-transform duration-75"
+        />
         <div
           id="circle"
           ref={circleRef}
