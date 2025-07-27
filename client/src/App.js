@@ -14,9 +14,8 @@ function App() {
   const animationIdRef = useRef(null);
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
-  const hasInitializedRef = useRef(false);
 
-  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -30,7 +29,7 @@ function App() {
       audioContextRef.current = context;
 
       const masterGain = context.createGain();
-      masterGain.gain.value = isMuted ? 0 : 1;
+      masterGain.gain.value = 1;  // always audible
       masterGainRef.current = masterGain;
 
       const source = context.createMediaElementSource(audio);
@@ -46,7 +45,7 @@ function App() {
       masterGain.connect(context.destination);
     }
 
-    // --- MEDIA SESSION API SETUP ---
+    // Media Session API setup
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new window.MediaMetadata({
         title: 'FlightNoise',
@@ -57,15 +56,9 @@ function App() {
         ],
       });
 
-      navigator.mediaSession.setActionHandler('play', () => {
-        audio.play();
-      });
-
-      navigator.mediaSession.setActionHandler('pause', () => {
-        audio.pause();
-      });
+      navigator.mediaSession.setActionHandler('play', () => audio.play());
+      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
     }
-    // --- END MEDIA SESSION ---
 
     const animate = () => {
       if (!analyserRef.current || !dataArrayRef.current) return;
@@ -86,45 +79,42 @@ function App() {
     };
 
     const handlePlay = () => {
+      setIsPlaying(true);
       if (!animationIdRef.current) animate();
     };
 
     const handlePause = () => {
+      setIsPlaying(false);
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
         animationIdRef.current = null;
       }
-      backingCircle.style.transform = 'scale(1)'; // reset circle scale on pause
+      backingCircle.style.transform = 'scale(1)';
     };
 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
 
     if (!audio.paused) {
-      animate();
+      handlePlay();
     }
 
-    const handleFirstInteraction = async () => {
-      if (!audioContextRef.current) return;
-      const context = audioContextRef.current;
-      if (context.state === 'suspended') await context.resume();
-      try {
-        await audio.play();
-      } catch (e) {
-        console.warn('Failed to play audio:', e);
+    const handleClick = async () => {
+      if (!audioContextRef.current) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContext();
+        audioContextRef.current = context;
+        if (context.state === 'suspended') await context.resume();
       }
-      hasInitializedRef.current = true;
-      window.removeEventListener('click', handleFirstInteraction);
-    };
 
-    window.addEventListener('click', handleFirstInteraction, { once: true });
-
-    const handleClick = () => {
-      if (!hasInitializedRef.current) return;
-      const newMuted = !isMuted;
-      setIsMuted(newMuted);
-      if (masterGainRef.current) {
-        masterGainRef.current.gain.value = newMuted ? 0 : 1;
+      if (audio.paused) {
+        try {
+          await audio.play();
+        } catch (e) {
+          console.warn('Failed to play audio:', e);
+        }
+      } else {
+        audio.pause();
       }
     };
 
@@ -134,19 +124,12 @@ function App() {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       circle.removeEventListener('click', handleClick);
-      window.removeEventListener('click', handleFirstInteraction);
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
         animationIdRef.current = null;
       }
     };
-  }, [isMuted]);
-
-  useEffect(() => {
-    if (masterGainRef.current) {
-      masterGainRef.current.gain.value = isMuted ? 0 : 1;
-    }
-  }, [isMuted]);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center space-y-8 p-4">
@@ -166,7 +149,9 @@ function App() {
           id="circle"
           ref={circleRef}
           className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title="Click to mute/unmute audio"
+          title={isPlaying ? "Click to pause audio" : "Click to play audio"}
+          aria-pressed={isPlaying}
+          role="button"
         >
           <IoMdAirplane className='text-gray-100 text-[2.8em]' />
         </div>
@@ -175,7 +160,7 @@ function App() {
           id="backing-circle"
           ref={backingCircleRef}
           className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title="Click to mute/unmute audio"
+          title={isPlaying ? "Click to pause audio" : "Click to play audio"}
         />
       </div>
 

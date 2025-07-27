@@ -52,7 +52,6 @@ const ClosestPlanes = () => {
 
   return (
     <div className="text-center mt-6">
-      <h2 className="text-xl font-bold mb-2">Closest Planes to LAX</h2>
       {planes.length === 0 ? (
         <p className="text-gray-500">Loading...</p>
       ) : (
