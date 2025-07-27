@@ -12,11 +12,9 @@ function App() {
   const sourceRef = useRef(null);
   const masterGainRef = useRef(null);
   const animationIdRef = useRef(null);
-  const elevatorSourceRef = useRef(null);
-  const elevatorGainRef = useRef(null);
-  const atcAnalyserRef = useRef(null);
-  const atcDataArrayRef = useRef(null);
-  const hasInitializedRef = useRef(false); // ✅ NEW: track first interaction
+  const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
+  const hasInitializedRef = useRef(false);
 
   const [isMuted, setIsMuted] = useState(false);
 
@@ -31,55 +29,31 @@ function App() {
       masterGain.gain.value = isMuted ? 0 : 1;
       masterGainRef.current = masterGain;
 
-      // Always create and connect source + ATC analyser
       const source = audioContext.createMediaElementSource(audio);
       sourceRef.current = source;
 
-      const atcAnalyser = audioContext.createAnalyser();
-      atcAnalyser.fftSize = 256;
-      atcAnalyserRef.current = atcAnalyser;
-      atcDataArrayRef.current = new Uint8Array(atcAnalyser.frequencyBinCount);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
 
-      source.connect(atcAnalyser);
-      atcAnalyser.connect(masterGain);
-
+      source.connect(analyser);
+      analyser.connect(masterGain);
       masterGain.connect(audioContext.destination);
 
-      // Elevator music
-      fetch('/flightnoise/elevator.mp3')
-        .then(res => res.arrayBuffer())
-        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
-        .then(buffer => {
-          const elevatorSource = audioContext.createBufferSource();
-          elevatorSource.buffer = buffer;
-          elevatorSource.loop = true;
-
-          const elevatorGain = audioContext.createGain();
-          elevatorGain.gain.value = 0.08;
-
-          elevatorSource.connect(elevatorGain);
-          elevatorGain.connect(masterGain);
-
-          elevatorSource.start();
-
-          elevatorSourceRef.current = elevatorSource;
-          elevatorGainRef.current = elevatorGain;
-        })
-        .catch(console.error);
-
       const animate = () => {
-        if (!atcAnalyserRef.current || !atcDataArrayRef.current) return;
+        if (!analyserRef.current || !dataArrayRef.current) return;
         animationIdRef.current = requestAnimationFrame(animate);
 
-        atcAnalyserRef.current.getByteTimeDomainData(atcDataArrayRef.current);
+        analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
 
         let sum = 0;
-        for (let i = 0; i < atcDataArrayRef.current.length; i++) {
-          const val = (atcDataArrayRef.current[i] - 128) / 128;
+        for (let i = 0; i < dataArrayRef.current.length; i++) {
+          const val = (dataArrayRef.current[i] - 128) / 128;
           sum += val * val;
         }
 
-        const rms = Math.sqrt(sum / atcDataArrayRef.current.length);
+        const rms = Math.sqrt(sum / dataArrayRef.current.length);
         const scale = 1 + rms * 5;
         backingCircle.style.transform = `scale(${(scale ** 1.25).toFixed(3)})`;
       };
@@ -102,14 +76,14 @@ function App() {
         console.warn('Failed to play audio:', e);
       }
 
-      hasInitializedRef.current = true; // ✅ Mark initialization done
+      hasInitializedRef.current = true;
       window.removeEventListener('click', handleFirstInteraction);
     };
 
     window.addEventListener('click', handleFirstInteraction, { once: true });
 
     const handleClick = () => {
-      if (!hasInitializedRef.current) return; // ✅ Prevent toggle on first setup click
+      if (!hasInitializedRef.current) return;
       const newMuted = !isMuted;
       setIsMuted(newMuted);
       if (masterGainRef.current) {
@@ -140,7 +114,7 @@ function App() {
         preload="auto"
         className="hidden"
         crossOrigin="anonymous"
-        src="https://ubuntu.seefortune.co.uk/flightnoise/api/stream"
+        src="http://localhost:7633/stream"
       >
         Your browser does not support the audio element.
       </audio>
@@ -150,7 +124,7 @@ function App() {
           id="circle"
           ref={circleRef}
           className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title="Click to mute/unmute ATC"
+          title="Click to mute/unmute audio"
         >
           <IoMdAirplane className='text-gray-100 text-[2.8em]' />
         </div>
@@ -159,9 +133,8 @@ function App() {
           id="backing-circle"
           ref={backingCircleRef}
           className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title="Click to mute/unmute ATC"
-        >
-        </div>
+          title="Click to mute/unmute audio"
+        />
       </div>
 
       <ClosestPlanes />

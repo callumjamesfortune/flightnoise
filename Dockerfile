@@ -1,6 +1,10 @@
 FROM node:18-alpine
 
+# Set working directory
 WORKDIR /app
+
+# Install FFmpeg and other build dependencies
+RUN apk add --no-cache ffmpeg
 
 # Install serve globally to serve the React build later
 RUN npm install -g serve
