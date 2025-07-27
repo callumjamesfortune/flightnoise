@@ -8,7 +8,7 @@ const PORT = 7633;
 const LIVEATC_STREAM = 'https://d.liveatc.net/klax6';
 const ELEVATOR_MUSIC_PATH = path.join(__dirname, 'public', 'elevator.mp3');
 
-app.get('/', (req, res) => {
+app.get('/stream', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'audio/mpeg');
 
