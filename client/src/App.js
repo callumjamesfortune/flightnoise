@@ -46,6 +46,27 @@ function App() {
       masterGain.connect(context.destination);
     }
 
+    // --- MEDIA SESSION API SETUP ---
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: 'FlightNoise',
+        artist: 'By Caldog',
+        album: 'FlightNoise',
+        artwork: [
+          { src: 'https://ubuntu.seefortune.co.uk/flightnoise/icon.png', sizes: '1024x1024', type: 'image/png' },
+        ],
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        audio.play();
+      });
+
+      navigator.mediaSession.setActionHandler('pause', () => {
+        audio.pause();
+      });
+    }
+    // --- END MEDIA SESSION ---
+
     const animate = () => {
       if (!analyserRef.current || !dataArrayRef.current) return;
 
