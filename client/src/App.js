@@ -17,19 +17,20 @@ function App() {
 
   const [isPlaying, setIsPlaying] = useState(false);
 
-  useEffect(() => {
+  const handleClick = async () => {
     const audio = audioRef.current;
-    const circle = circleRef.current;
     const backingCircle = backingCircleRef.current;
-    if (!audio || !circle || !backingCircle) return;
+    if (!audio || !backingCircle) return;
 
     if (!audioContextRef.current) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const context = new AudioContext();
       audioContextRef.current = context;
 
+      if (context.state === 'suspended') await context.resume();
+
       const masterGain = context.createGain();
-      masterGain.gain.value = 1;  // always audible
+      masterGain.gain.value = 1;
       masterGainRef.current = masterGain;
 
       const source = context.createMediaElementSource(audio);
@@ -43,7 +44,48 @@ function App() {
       source.connect(analyser);
       analyser.connect(masterGain);
       masterGain.connect(context.destination);
+
+      const animate = () => {
+        animationIdRef.current = requestAnimationFrame(animate);
+
+        analyser.getByteTimeDomainData(dataArrayRef.current);
+
+        let sum = 0;
+        for (let i = 0; i < dataArrayRef.current.length; i++) {
+          const val = (dataArrayRef.current[i] - 128) / 128;
+          sum += val * val;
+        }
+
+        const rms = Math.sqrt(sum / dataArrayRef.current.length);
+        const scale = 1 + rms * 5;
+        backingCircle.style.transform = `scale(${(scale ** 1.35).toFixed(3)})`;
+      };
+
+      animate();
     }
+
+    try {
+      if (audio.paused) {
+        await audio.play();
+        setIsPlaying(true);
+      } else {
+        audio.pause();
+        setIsPlaying(false);
+        if (animationIdRef.current) {
+          cancelAnimationFrame(animationIdRef.current);
+          animationIdRef.current = null;
+          backingCircle.style.transform = 'scale(1)';
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to toggle audio:', e);
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    const circle = circleRef.current;
+    if (!audio || !circle) return;
 
     // Media Session API setup
     if ('mediaSession' in navigator) {
@@ -60,64 +102,11 @@ function App() {
       navigator.mediaSession.setActionHandler('pause', () => audio.pause());
     }
 
-    const animate = () => {
-      if (!analyserRef.current || !dataArrayRef.current) return;
-
-      animationIdRef.current = requestAnimationFrame(animate);
-
-      analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
-
-      let sum = 0;
-      for (let i = 0; i < dataArrayRef.current.length; i++) {
-        const val = (dataArrayRef.current[i] - 128) / 128;
-        sum += val * val;
-      }
-
-      const rms = Math.sqrt(sum / dataArrayRef.current.length);
-      const scale = 1 + rms * 5;
-      backingCircle.style.transform = `scale(${(scale ** 1.35).toFixed(3)})`;
-    };
-
-    const handlePlay = () => {
-      setIsPlaying(true);
-      if (!animationIdRef.current) animate();
-    };
-
-    const handlePause = () => {
-      setIsPlaying(false);
-      if (animationIdRef.current) {
-        cancelAnimationFrame(animationIdRef.current);
-        animationIdRef.current = null;
-      }
-      backingCircle.style.transform = 'scale(1)';
-    };
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
-
-    if (!audio.paused) {
-      handlePlay();
-    }
-
-    const handleClick = async () => {
-      if (!audioContextRef.current) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const context = new AudioContext();
-        audioContextRef.current = context;
-        if (context.state === 'suspended') await context.resume();
-      }
-
-      if (audio.paused) {
-        try {
-          await audio.play();
-        } catch (e) {
-          console.warn('Failed to play audio:', e);
-        }
-      } else {
-        audio.pause();
-      }
-    };
-
     circle.addEventListener('click', handleClick);
 
     return () => {
