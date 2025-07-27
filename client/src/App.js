@@ -6,21 +6,16 @@ import './App.css';
 function App() {
   const audioRef = useRef(null);
   const circleRef = useRef(null);
-  const backingCircleRef = useRef(null);
 
   const audioContextRef = useRef(null);
   const sourceRef = useRef(null);
   const masterGainRef = useRef(null);
-  const animationIdRef = useRef(null);
-  const analyserRef = useRef(null);
-  const dataArrayRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handleClick = async () => {
     const audio = audioRef.current;
-    const backingCircle = backingCircleRef.current;
-    if (!audio || !backingCircle) return;
+    if (!audio) return;
 
     if (!audioContextRef.current) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -36,32 +31,8 @@ function App() {
       const source = context.createMediaElementSource(audio);
       sourceRef.current = source;
 
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 256;
-      analyserRef.current = analyser;
-      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
-
-      source.connect(analyser);
-      analyser.connect(masterGain);
+      source.connect(masterGain);
       masterGain.connect(context.destination);
-
-      const animate = () => {
-        animationIdRef.current = requestAnimationFrame(animate);
-
-        analyser.getByteTimeDomainData(dataArrayRef.current);
-
-        let sum = 0;
-        for (let i = 0; i < dataArrayRef.current.length; i++) {
-          const val = (dataArrayRef.current[i] - 128) / 128;
-          sum += val * val;
-        }
-
-        const rms = Math.sqrt(sum / dataArrayRef.current.length);
-        const scale = 1 + rms * 5;
-        backingCircle.style.transform = `scale(${(scale ** 1.35).toFixed(3)})`;
-      };
-
-      animate();
     }
 
     try {
@@ -71,11 +42,6 @@ function App() {
       } else {
         audio.pause();
         setIsPlaying(false);
-        if (animationIdRef.current) {
-          cancelAnimationFrame(animationIdRef.current);
-          animationIdRef.current = null;
-          backingCircle.style.transform = 'scale(1)';
-        }
       }
     } catch (e) {
       console.warn('Failed to toggle audio:', e);
@@ -113,10 +79,6 @@ function App() {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       circle.removeEventListener('click', handleClick);
-      if (animationIdRef.current) {
-        cancelAnimationFrame(animationIdRef.current);
-        animationIdRef.current = null;
-      }
     };
   }, []);
 
@@ -144,13 +106,6 @@ function App() {
         >
           <IoMdAirplane className='text-gray-100 text-[2.8em]' />
         </div>
-
-        <div
-          id="backing-circle"
-          ref={backingCircleRef}
-          className="absolute w-24 h-24 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
-          title={isPlaying ? "Click to pause audio" : "Click to play audio"}
-        />
       </div>
 
       <ClosestPlanes />
