@@ -114,7 +114,7 @@ function App() {
         preload="auto"
         className="hidden"
         crossOrigin="anonymous"
-        src="http://localhost:7633/stream"
+        src="http://ubuntu.seefortune.co.uk/flightnoise/api/stream"
       >
         Your browser does not support the audio element.
       </audio>
