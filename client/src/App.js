@@ -78,6 +78,8 @@ function App() {
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
 
+    let currentScale = 1;
+
     const animate = () => {
       const analyser = analyserRef.current;
       const bg = backgroundCircleRef.current;
@@ -87,8 +89,12 @@ function App() {
         analyser.getByteFrequencyData(data);
         const volume = data.reduce((a, b) => a + b, 0) / data.length;
 
-        const scale = 1 + (volume / 255); // adjust sensitivity here
-        bg.style.transform = `scale(${scale.toFixed(2)})`;
+        const targetScale = 1 + (volume / 255) * 0.5; // scale range: 1–1.5
+
+        // Smooth interpolation (easing)
+        currentScale += (targetScale - currentScale) * 0.1;
+
+        bg.style.transform = `scale(${currentScale.toFixed(3)})`;
       }
 
       requestAnimationFrame(animate);
@@ -123,12 +129,12 @@ function App() {
       <div className='relative w-24 h-24'>
         <div
           ref={backgroundCircleRef}
-          className="absolute w-24 h-24 bg-purple-500 opacity-50 rounded-full z-0 transition-transform duration-75"
+          className="absolute w-24 h-24 bg-purple-500 opacity-50 rounded-full z-0"
         />
         <div
           id="circle"
           ref={circleRef}
-          className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer transition-transform duration-150"
+          className="absolute w-24 h-24 z-10 bg-purple-800 rounded-full flex items-center justify-center cursor-pointer"
           title={isPlaying ? "Click to pause audio" : "Click to play audio"}
           aria-pressed={isPlaying}
           role="button"
